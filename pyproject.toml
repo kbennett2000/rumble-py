@@ -1,0 +1,89 @@
+# pyproject.toml — project metadata, dependencies, and tool configuration.
+#
+# We use hatchling as the build backend. It's the modern, low-config choice
+# for pure-Python projects (no setup.py, no MANIFEST.in needed).
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rumble-py"
+version = "0.1.0"
+description = "DTMF-controlled Mumble client for linking analog amateur radios over the internet."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Kris Bennett (AE9S)", email = "kbennett2000@gmail.com" },
+]
+keywords = ["ham-radio", "amateur-radio", "mumble", "dtmf", "voip"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Ham Radio",
+]
+
+# Runtime dependencies. We pin loosely (>=) so that pip can resolve compatible
+# versions, but lock the major where we know breaking changes happen.
+dependencies = [
+    "pymumble>=1.6",       # speaks the Mumble protocol directly (no subprocess)
+    "sounddevice>=0.4",    # cross-platform audio I/O via PortAudio
+    "numpy>=1.26",         # used for DTMF DSP (Goertzel filter, FFT, etc.)
+    "pyyaml>=6.0",         # config file parsing
+    "pyttsx3>=2.90",       # offline text-to-speech for voice prompts
+    "fastapi>=0.110",      # web UI for configuration
+    "uvicorn[standard]>=0.27",  # ASGI server that runs FastAPI
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "ruff>=0.4",
+    "black>=24.0",
+]
+
+[project.scripts]
+# Adds a `rumble` command on the PATH that's equivalent to `python -m rumble`.
+rumble = "rumble.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/kbennett2000/rumble-py"
+
+# ---------------------------------------------------------------------------
+# Tool configuration
+# ---------------------------------------------------------------------------
+
+# Tell hatchling where the package lives. Without this, hatchling would look
+# for a top-level `rumble_py` directory and fail.
+[tool.hatch.build.targets.wheel]
+packages = ["src/rumble"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# A reasonable starter set: pycodestyle errors+warnings, Pyflakes, isort,
+# bugbear, pyupgrade. Add more as the project matures.
+select = ["E", "W", "F", "I", "B", "UP"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+# Test files can do weird things (unused imports for fixtures, etc.).
+"tests/*" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"

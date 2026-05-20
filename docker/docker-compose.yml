@@ -1,0 +1,60 @@
+# Local development Mumble server.
+#
+# Image: mumblevoip/mumble-server (the official image maintained by the
+# Mumble project itself).
+#
+# How configuration works on this image:
+#   The container builds /data/mumble_server_config.ini on the fly at startup
+#   from MUMBLE_CONFIG_<setting> environment variables. A bind-mounted .ini
+#   file is NOT read — only env vars take effect. The full list of supported
+#   settings is the standard Murmur.ini set:
+#       https://wiki.mumble.info/wiki/Murmur.ini
+#   And the env-var convention (case-insensitive, underscores allowed) plus
+#   the special non-CONFIG_ vars (MUMBLE_SUPERUSER_PASSWORD,
+#   MUMBLE_ACCEPT_UNKNOWN_SETTINGS, MUMBLE_VERBOSE, MUMBLE_CUSTOM_CONFIG_FILE,
+#   etc.) are documented in the image's own README:
+#       https://github.com/mumble-voip/mumble-docker/blob/master/README.md
+#
+# Bring up:    docker compose up -d
+# Bring down:  docker compose down
+# Logs:        docker compose logs -f mumble
+# Verify:      docker compose logs mumble | grep -i welcometext
+#              → should show the rumble-py dev server welcome text being set.
+
+services:
+  mumble:
+    image: mumblevoip/mumble-server:latest
+    container_name: rumble-py-mumble
+    restart: unless-stopped
+    ports:
+      - "64738:64738/tcp"
+      - "64738:64738/udp"
+    volumes:
+      # Persist the server's SQLite db and generated config across restarts.
+      - mumble-data:/data
+    environment:
+      # ----- visible identity -----
+      MUMBLE_CONFIG_WELCOMETEXT: "rumble-py dev server"
+
+      # ----- network -----
+      MUMBLE_CONFIG_PORT: 64738
+
+      # ----- capacity / limits (mirroring the old .ini intent) -----
+      MUMBLE_CONFIG_USERS: 100
+      MUMBLE_CONFIG_BANDWIDTH: 72000
+      MUMBLE_CONFIG_TIMEOUT: 30
+
+      # ----- permissive local-dev access -----
+      # Empty server password = anyone can connect without a password.
+      # Quote the empty string so YAML doesn't interpret it as null.
+      MUMBLE_CONFIG_SERVER_PASSWORD: ""
+      # Don't auto-ban; this is a dev box, not the public internet.
+      MUMBLE_CONFIG_AUTOBANATTEMPTS: 0
+
+      # ----- predictable admin credentials for dev -----
+      # Pin the SuperUser password so it doesn't get randomly regenerated on
+      # every rebuild. NEVER use this value in production.
+      MUMBLE_SUPERUSER_PASSWORD: "rumble-dev"
+
+volumes:
+  mumble-data:

@@ -216,3 +216,18 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---------------------------------------------------------------------------
+# rumble-py
+# ---------------------------------------------------------------------------
+# Local user config — copy from config.example.yaml and edit.
+config.yaml
+config.yml
+
+# Local audio recordings / debug captures
+*.wav
+!docker/**/*.wav
+
+# Editor scratch
+.vscode/
+.idea/
