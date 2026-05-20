@@ -433,26 +433,6 @@ We're honest about what works today and what doesn't.
 - Per-bank ident schedules (so a Field Day bank IDs every 5 minutes,
   a casual bank every 9).
 
-## Comparison to the original C# Rumble
-
-For hams who knew the [original C# project](https://github.com/kbennett2000/Rumble):
-
-| | C# Rumble (2019-2022) | rumble-py (this) |
-|---|---|---|
-| Language | C# .NET Framework | Python 3.11+ |
-| OS | Windows only | Linux primary, Windows secondary |
-| Mumble interface | Controlled the Mumble desktop client via UI automation | Speaks the Mumble protocol directly via pymumble |
-| DTMF detection | DtmfDetection library + WinForms | Goertzel + numpy |
-| Config | CSV with one row per (server, channel) | YAML with banks, hierarchical |
-| UI | WinForms | Web UI (browser) |
-| Identifies as | Same operator | Same operator |
-| Command grammar | `#*`, `#N*`, `#XX#Y*`, `#XXX#Y*` | **Same.** Operators don't have to relearn anything. |
-
-The command grammar is **identical** to the C# version on purpose. Hams
-who already learned the DTMF sequences for the old project don't have to
-relearn anything. The implementations are different, but as far as the
-radio operator is concerned, this is the same node.
-
 ## Troubleshooting
 
 | Symptom | First thing to check |
