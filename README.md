@@ -26,6 +26,13 @@ python -m rumble
 
 # 4. Run the tests.
 pytest
+
+# 5. Verify the DTMF detector against a real radio. Connect the radio's
+#    receive audio to an input device (line-in, USB sound card, etc.) and:
+python scripts/listen_for_dtmf.py
+#    Then key tones into the radio — each detected tone prints a timestamped
+#    start/stop line. Pass --device <index-or-name-substring> to skip the
+#    interactive picker.
 ```
 
 ## License
