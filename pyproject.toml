@@ -47,6 +47,8 @@ dependencies = [
     "pyttsx3>=2.90",       # offline text-to-speech for voice prompts
     "fastapi>=0.110",      # web UI for configuration
     "uvicorn[standard]>=0.27",  # ASGI server that runs FastAPI
+    "jinja2>=3.1",         # HTML templates for the web UI
+    "python-multipart>=0.0.9",  # form-data parsing for action endpoints
 ]
 
 [project.optional-dependencies]
@@ -55,6 +57,7 @@ dev = [
     "pytest-cov>=4.1",
     "ruff>=0.4",
     "black>=24.0",
+    "httpx>=0.27",       # required by fastapi.testclient (test-only)
 ]
 
 [project.scripts]

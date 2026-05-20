@@ -76,6 +76,15 @@ class FakeMumbleClient:
     def muted(self) -> bool:
         return self._muted
 
+    @property
+    def users_in_current_channel(self) -> list[str]:
+        # No other users by default; tests that want peers can append here.
+        return []
+
+    @property
+    def host(self) -> str:
+        return self.server.host
+
     # --- test-side helpers ---
 
     def fire_state(self, state: ConnectionState) -> None:
@@ -160,3 +169,104 @@ class FakeTtsFactory:
         tts = FakeTextToSpeech()
         self.last = tts
         return tts  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# FakeDispatcher — stand-in for web tests
+# ---------------------------------------------------------------------------
+
+
+from enum import Enum  # noqa: E402
+
+from rumble.config import RumbleConfig  # noqa: E402
+from rumble.web.log_buffer import LogBuffer  # noqa: E402
+
+
+class _FakeConnectionState(Enum):
+    DISCONNECTED = 1
+    CONNECTED = 2
+
+
+class FakeDispatcher:
+    """Drop-in stand-in for :class:`rumble.commands.Dispatcher` in web tests.
+
+    Implements the same property/method surface the web app reads. Records
+    every action call on public attributes named ``*_calls`` for assertions.
+    """
+
+    def __init__(self, config: RumbleConfig) -> None:
+        self._config = config
+        self._active_bank_num = config.initial_bank
+        first_server = config.get_bank(self._active_bank_num).servers[0]
+        self._mumble = FakeMumbleClient(first_server)
+        self._mumble.connect()
+        self._log_buffer = LogBuffer()
+        self._command_buffer = ""
+        self._sticky_mute = False
+
+        # action records
+        self.feed_dtmf_calls: list[str] = []
+        self.set_bank_calls: list[int] = []
+        self.reload_config_calls: list[object] = []
+        self.reload_should_raise: Exception | None = None
+
+    # --- dispatcher-shaped properties ---
+
+    @property
+    def config(self) -> RumbleConfig:
+        return self._config
+
+    @property
+    def is_running(self) -> bool:
+        return True
+
+    @property
+    def state(self) -> _FakeConnectionState:
+        return (
+            _FakeConnectionState.CONNECTED
+            if self._mumble.is_connected
+            else _FakeConnectionState.DISCONNECTED
+        )
+
+    @property
+    def mumble(self) -> FakeMumbleClient:
+        return self._mumble
+
+    @property
+    def active_bank(self) -> int:
+        return self._active_bank_num
+
+    @property
+    def available_banks(self) -> list[int]:
+        return sorted(self._config.banks.keys())
+
+    @property
+    def current_command_buffer(self) -> str:
+        return self._command_buffer
+
+    @property
+    def sticky_mute(self) -> bool:
+        return self._sticky_mute
+
+    @property
+    def log_buffer(self) -> LogBuffer:
+        return self._log_buffer
+
+    # --- dispatcher-shaped actions ---
+
+    def feed_dtmf(self, char: str) -> None:
+        self.feed_dtmf_calls.append(char)
+
+    def set_bank(self, n: int) -> None:
+        # Mirror the real dispatcher's error shape.
+        from rumble.config import ConfigError
+
+        if n not in self.available_banks:
+            raise ConfigError(f"bank {n} is not configured")
+        self._active_bank_num = n
+        self.set_bank_calls.append(n)
+
+    def reload_config(self, path: object = None) -> None:
+        self.reload_config_calls.append(path)
+        if self.reload_should_raise is not None:
+            raise self.reload_should_raise

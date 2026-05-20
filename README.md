@@ -48,6 +48,32 @@ python -m rumble --config config.dev.yaml
 #    and starts listening for DTMF. Ctrl-C to shut down.
 ```
 
+## Web UI
+
+While the dispatcher is running, a small web interface is available at
+[http://127.0.0.1:8080/](http://127.0.0.1:8080/) by default. It shows live
+state (connection, current channel, users, current bank, DTMF buffer), lets
+you exercise the dispatcher without a radio via an on-screen DTMF keypad,
+and tails the log in real time over Server-Sent Events. It's intended for
+status checks and light remote control — not as a fully-featured admin
+console.
+
+To disable it, set `web.enabled: false` in your config.
+
+To expose it on the local network, set `web.host: 0.0.0.0` and pick a port —
+**but note that there's no authentication**. Only do this on a trusted LAN
+and consider a reverse proxy with basic auth in front if you need wider
+access.
+
+For a quick browser test without the audio pipeline:
+
+```bash
+python scripts/web_smoke.py --config config.dev.yaml
+# → Web UI at http://127.0.0.1:8080/
+```
+
+<!-- TODO: screenshot — replace this comment with an image of the UI -->
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

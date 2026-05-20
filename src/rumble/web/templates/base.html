@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rumble-py {% block subtitle %}{% endblock %}</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2" crossorigin="anonymous"></script>
+  <style>
+    /* -------- palette -------- */
+    :root {
+      --bg:       #0e1117;
+      --panel:    #161b22;
+      --panel-2:  #1e242d;
+      --border:   #30363d;
+      --fg:       #e6edf3;
+      --muted:    #8b949e;
+      --accent:   #7ed957;       /* indicator green */
+      --accent-2: #3fb950;
+      --warn:     #f0883e;
+      --bad:      #f85149;
+      --link:     #58a6ff;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f6f8fa; --panel: #fff; --panel-2: #eef2f6;
+        --border: #d0d7de; --fg: #1f2328; --muted: #57606a;
+        --accent: #1f8a3a; --accent-2: #1a6e2f; --warn: #9a6700;
+        --bad: #cf222e; --link: #0969da;
+      }
+    }
+    /* -------- layout -------- */
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); }
+    body {
+      font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 12px;
+    }
+    header {
+      display: flex; align-items: baseline; gap: 12px;
+      padding-bottom: 8px; margin-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 20px; margin: 0; letter-spacing: 0.5px; }
+    header .callsign { color: var(--accent); font-family: ui-monospace, SFMono-Regular, monospace; }
+    header .version { margin-left: auto; color: var(--muted); font-size: 12px; }
+    h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 1px;
+         color: var(--muted); margin: 0 0 8px; }
+    section.panel {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 6px; padding: 12px; margin-bottom: 12px;
+    }
+    .grid-2 {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+    @media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
+    /* -------- status table -------- */
+    .kv { display: grid; grid-template-columns: 140px 1fr; gap: 4px 12px; }
+    .kv dt { color: var(--muted); }
+    .kv dd { margin: 0; font-family: ui-monospace, SFMono-Regular, monospace; }
+    .pill {
+      display: inline-block; padding: 1px 8px; border-radius: 10px;
+      font-size: 12px; background: var(--panel-2); border: 1px solid var(--border);
+    }
+    .pill.ok  { color: var(--accent); border-color: var(--accent); }
+    .pill.bad { color: var(--bad); border-color: var(--bad); }
+    .pill.warn { color: var(--warn); border-color: var(--warn); }
+    .dtmf-buffer {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 18px; letter-spacing: 2px;
+      padding: 4px 8px; border-radius: 4px;
+      background: var(--panel-2); border: 1px solid var(--border);
+      min-height: 1.5em;
+    }
+    .dtmf-buffer.active { color: var(--accent); border-color: var(--accent); }
+    /* -------- keypad -------- */
+    .keypad {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+      max-width: 320px;
+    }
+    .keypad button {
+      font: 600 18px ui-monospace, SFMono-Regular, monospace;
+      padding: 14px 0;
+      background: var(--panel-2); color: var(--fg);
+      border: 1px solid var(--border); border-radius: 4px;
+      cursor: pointer;
+    }
+    .keypad button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .keypad button:active:not(:disabled) { background: var(--accent); color: var(--bg); }
+    .keypad button:disabled { color: var(--muted); cursor: not-allowed; }
+    /* -------- buttons -------- */
+    .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .row > * { flex: 0 0 auto; }
+    button.btn, select {
+      font: 14px ui-monospace, SFMono-Regular, monospace;
+      padding: 6px 10px;
+      background: var(--panel-2); color: var(--fg);
+      border: 1px solid var(--border); border-radius: 4px;
+      cursor: pointer;
+    }
+    button.btn:hover { border-color: var(--accent); }
+    button.btn.bad { color: var(--bad); border-color: var(--bad); }
+    button.btn.warn { color: var(--warn); border-color: var(--warn); }
+    /* -------- channel table -------- */
+    table.channels {
+      width: 100%; border-collapse: collapse; font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+    table.channels th, table.channels td {
+      text-align: left; padding: 4px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    table.channels th { color: var(--muted); font-weight: normal; font-size: 12px; }
+    table.channels tr:hover td { background: var(--panel-2); }
+    /* -------- log tail -------- */
+    .log {
+      background: #000; color: #b9c3cf;
+      font: 11px/1.4 ui-monospace, SFMono-Regular, monospace;
+      padding: 8px; height: 260px; overflow-y: auto;
+      border-radius: 4px; border: 1px solid var(--border);
+      white-space: pre-wrap; word-break: break-all;
+    }
+    .log .line { display: block; }
+    .log .line.WARN, .log .line.WARNING { color: var(--warn); }
+    .log .line.ERROR { color: var(--bad); }
+    .log .line.DEBUG { color: var(--muted); }
+    /* -------- banners -------- */
+    .banner { padding: 6px 10px; border-radius: 4px; margin: 8px 0; }
+    .banner-ok { background: rgba(126, 217, 87, 0.15); color: var(--accent); border: 1px solid var(--accent); }
+    .banner-bad { background: rgba(248, 81, 73, 0.15); color: var(--bad); border: 1px solid var(--bad); }
+    /* -------- htmx feedback -------- */
+    .htmx-request { opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>rumble-py</h1>
+    <span class="callsign">{{ callsign }}</span>
+    <span class="version">v{{ version }}</span>
+  </header>
+  {% block body %}{% endblock %}
+</body>
+</html>

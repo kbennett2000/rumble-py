@@ -1,0 +1,47 @@
+{# Status partial — embedded in index.html AND served standalone for HTMX. #}
+<div id="status">
+  <dl class="kv">
+    <dt>state</dt>
+    <dd>
+      {% if is_connected %}
+        <span class="pill ok">{{ state_name }}</span>
+      {% elif state_name in ("RECONNECTING", "CONNECTING") %}
+        <span class="pill warn">{{ state_name }}</span>
+      {% else %}
+        <span class="pill bad">{{ state_name }}</span>
+      {% endif %}
+    </dd>
+
+    <dt>server</dt>
+    <dd>{{ current_server_name or "—" }}</dd>
+
+    <dt>channel</dt>
+    <dd>{{ current_channel or "—" }}</dd>
+
+    <dt>users</dt>
+    <dd>
+      {% if users_in_channel %}
+        {{ users_in_channel | join(", ") }}
+      {% else %}
+        <span style="color: var(--muted);">none</span>
+      {% endif %}
+    </dd>
+
+    <dt>bank</dt>
+    <dd>{{ active_bank }}</dd>
+
+    <dt>mute</dt>
+    <dd>
+      {% if is_muted %}
+        <span class="pill warn">muted{% if sticky_mute %} (sticky){% endif %}</span>
+      {% else %}
+        <span class="pill ok">live</span>
+      {% endif %}
+    </dd>
+
+    <dt>DTMF buffer</dt>
+    <dd>
+      <span class="dtmf-buffer {% if dtmf_buffer %}active{% endif %}">{{ dtmf_buffer or "&nbsp;" | safe }}</span>
+    </dd>
+  </dl>
+</div>

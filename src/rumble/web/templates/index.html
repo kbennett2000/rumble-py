@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block subtitle %}— {{ callsign }}{% endblock %}
+
+{% block body %}
+<div class="grid-2">
+  <section class="panel">
+    <h2>Status</h2>
+    {# Auto-refreshes every 1s. The fragment is the same one /partials/status returns. #}
+    <div hx-get="/partials/status"
+         hx-trigger="every 1s"
+         hx-swap="innerHTML"
+         id="status-wrap">
+      {% include "partials/status.html" %}
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Controls</h2>
+
+    <div style="margin-bottom: 12px;">
+      <h2 style="margin-bottom: 4px;">DTMF keypad</h2>
+      <div class="keypad">
+        {% for row in dtmf_keys %}
+          {% for key, active in row %}
+            {% if active %}
+              <button type="button"
+                      hx-post="/actions/dtmf"
+                      hx-vals='{"char": "{{ key }}"}'
+                      hx-target="#status-wrap"
+                      hx-swap="innerHTML">{{ key }}</button>
+            {% else %}
+              <button type="button" disabled>{{ key }}</button>
+            {% endif %}
+          {% endfor %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="row" style="margin-bottom: 8px;">
+      <label for="bank-select">bank</label>
+      <select id="bank-select"
+              name="bank"
+              hx-post="/actions/bank"
+              hx-trigger="change"
+              hx-target="#status-wrap"
+              hx-swap="innerHTML"
+              hx-on::after-request="htmx.ajax('GET', '/partials/channels', '#channels-wrap')">
+        {% for b in available_banks %}
+          <option value="{{ b }}" {% if b == active_bank %}selected{% endif %}>bank {{ b }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="row" style="margin-bottom: 8px;">
+      {% if is_muted %}
+        <button class="btn warn"
+                hx-post="/actions/mute"
+                hx-vals='{"muted": "false"}'
+                hx-target="#status-wrap"
+                hx-swap="innerHTML">unmute</button>
+      {% else %}
+        <button class="btn"
+                hx-post="/actions/mute"
+                hx-vals='{"muted": "true"}'
+                hx-target="#status-wrap"
+                hx-swap="innerHTML">mute</button>
+      {% endif %}
+
+      <button class="btn bad"
+              hx-post="/actions/disconnect"
+              hx-target="#status-wrap"
+              hx-swap="innerHTML">disconnect</button>
+
+      <button class="btn"
+              hx-post="/actions/reload-config"
+              hx-target="#reload-banner-slot"
+              hx-swap="innerHTML"
+              {# HTMX 1.9 skips the swap on 4xx by default; the reload route
+                 returns 400 + an HTML error banner that we *do* want shown,
+                 so re-enable the swap for this button only. #}
+              hx-on:htmx:before-swap="if (event.detail.xhr.status === 400) { event.detail.shouldSwap = true; event.detail.isError = false; }">reload config</button>
+    </div>
+    <div id="reload-banner-slot"></div>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>Channel map (bank {{ active_bank }})</h2>
+  <div id="channels-wrap"
+       hx-get="/partials/channels"
+       hx-trigger="every 5s"
+       hx-swap="innerHTML">
+    {% include "partials/channels.html" %}
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Log</h2>
+  <div class="log" id="log"></div>
+  <script>
+    (function () {
+      const log = document.getElementById("log");
+      const src = new EventSource("/events/logs");
+      src.onmessage = function (e) {
+        if (!e.data) return;
+        const line = document.createElement("span");
+        line.className = "line";
+        // Tag the line by level so CSS can color it.
+        const m = e.data.match(/\s(DEBUG|INFO|WARNING|WARN|ERROR)\s/);
+        if (m) line.classList.add(m[1]);
+        line.textContent = e.data + "\n";
+        log.appendChild(line);
+        // Trim to ~500 lines client-side.
+        while (log.childNodes.length > 500) log.removeChild(log.firstChild);
+        log.scrollTop = log.scrollHeight;
+      };
+      src.onerror = function () {
+        // Browser auto-reconnects EventSource; nothing to do here.
+      };
+    })();
+  </script>
+</section>
+{% endblock %}

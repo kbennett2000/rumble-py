@@ -1,0 +1,25 @@
+{# Channel map for the active bank. #}
+<table class="channels" id="channels">
+  <thead>
+    <tr>
+      <th>DTMF</th>
+      <th>server</th>
+      <th>path</th>
+      <th>nickname</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% if channels %}
+      {% for c in channels %}
+      <tr>
+        <td>{{ c.server_number }}/{{ c.channel_number }}</td>
+        <td>{{ c.server_ref }}</td>
+        <td>{{ c.channel_path }}</td>
+        <td>{{ c.nickname }}</td>
+      </tr>
+      {% endfor %}
+    {% else %}
+      <tr><td colspan="4" style="color: var(--muted);">no channel mappings in bank {{ active_bank }}</td></tr>
+    {% endif %}
+  </tbody>
+</table>

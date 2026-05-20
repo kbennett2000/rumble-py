@@ -27,14 +27,17 @@ import logging
 import queue
 import threading
 from collections.abc import Callable
-from typing import Protocol
+from pathlib import Path
+from typing import Any, Protocol
 
 from rumble.audio import AudioCapture
 from rumble.config import (
     AudioConfig,
     Bank,
+    ConfigError,
     MumbleServerConfig,
     RumbleConfig,
+    load_config,
 )
 from rumble.dtmf import (
     AdminSetting,
@@ -131,6 +134,7 @@ class Dispatcher:
         config: RumbleConfig,
         bank: int | None = None,
         *,
+        config_path: Path | None = None,
         mumble_factory: _MumbleFactory | None = None,
         audio_capture_factory: _AudioCaptureFactory | None = None,
         tts_factory: _TtsFactory | None = None,
@@ -140,12 +144,15 @@ class Dispatcher:
         Args:
             config: A loaded :class:`RumbleConfig`.
             bank: Override the active bank (defaults to ``config.initial_bank``).
+            config_path: Path the config was loaded from. If given,
+                :meth:`reload_config` defaults to re-reading it.
             mumble_factory: For tests — produces a MumbleClient given a
                 :class:`MumbleServerConfig`. The default uses the real one.
             audio_capture_factory: For tests — same idea for AudioCapture.
             tts_factory: For tests — same idea for TextToSpeech.
         """
         self._config = config
+        self._config_path = config_path
         self._active_bank_num = bank if bank is not None else config.initial_bank
         # Validate the requested bank up front so we don't fail mid-start.
         self._active_bank: Bank = config.get_bank(self._active_bank_num)
@@ -168,6 +175,13 @@ class Dispatcher:
         # TTS worker — runs synthesis off the audio/pymumble threads.
         self._tts_queue: queue.Queue[str | None] = queue.Queue()
         self._tts_thread: threading.Thread | None = None
+
+        # Web UI plumbing — lazily created in start() so importing the
+        # dispatcher doesn't pull in FastAPI when the web UI is disabled.
+        self._log_buffer: Any = None
+        self._log_handler: Any = None
+        self._uvicorn_server: Any = None
+        self._uvicorn_thread: threading.Thread | None = None
 
     # ----- public properties --------------------------------------------
 
@@ -195,6 +209,75 @@ class Dispatcher:
     def sticky_mute(self) -> bool:
         """Whether the sticky-mute flag (admin 00/0) is set."""
         return self._sticky_mute
+
+    @property
+    def config(self) -> RumbleConfig:
+        """The currently-loaded config (may be replaced by :meth:`reload_config`)."""
+        return self._config
+
+    @property
+    def available_banks(self) -> list[int]:
+        """Sorted list of bank numbers in the current config."""
+        return sorted(self._config.banks.keys())
+
+    @property
+    def state(self) -> Any:
+        """Mumble connection state (or ``None`` if not started). Pass-through."""
+        if self._mumble is None:
+            return None
+        return self._mumble.state
+
+    @property
+    def log_buffer(self) -> Any:
+        """The :class:`LogBuffer` powering the web UI, or ``None`` when web is off."""
+        return self._log_buffer
+
+    # ----- web-driven actions -------------------------------------------
+
+    def set_bank(self, n: int) -> None:
+        """Switch the active bank — equivalent to receiving ``LoadConfig(bank=n)``.
+
+        Raises:
+            ConfigError: If ``n`` is not a configured bank.
+        """
+        if n not in self.available_banks:
+            raise ConfigError(f"bank {n} is not configured")
+        self._handle_load_config(n)
+
+    def reload_config(self, path: Path | None = None) -> None:
+        """Re-read the YAML config from disk and swap it in if it's valid.
+
+        The currently-active bank must still exist in the new file, and the
+        active server-list must remain compatible (we don't tear down the
+        Mumble connection or audio capture on reload — that would amount to
+        a restart with extra steps). If anything's off, raises ConfigError
+        and the current config stays in place.
+
+        Args:
+            path: Override the path to re-read. Defaults to whatever was
+                supplied at construction.
+        """
+        target = path or self._config_path
+        if target is None:
+            raise ConfigError(
+                "reload_config: no config path is known. "
+                "Pass config_path= when constructing the Dispatcher."
+            )
+        new_config = load_config(target)  # raises ConfigError on its own
+        if self._active_bank_num not in new_config.banks:
+            raise ConfigError(
+                f"reload would drop the active bank {self._active_bank_num}; "
+                f"new banks: {sorted(new_config.banks.keys())}"
+            )
+        with self._lock:
+            self._config = new_config
+            self._active_bank = new_config.get_bank(self._active_bank_num)
+        logger.info(
+            "config reloaded from %s (banks=%s, active=%d)",
+            target,
+            sorted(new_config.banks.keys()),
+            self._active_bank_num,
+        )
 
     # ----- lifecycle ----------------------------------------------------
 
@@ -227,6 +310,11 @@ class Dispatcher:
             self._running = True
             self._stop_event.clear()
 
+        # Web UI runs outside the lock — its startup may take a moment and
+        # holding the lock would block every public method during that time.
+        if self._config.web.enabled:
+            self._start_web_server()
+
         # Announce outside the lock — _tts_say is enqueue-only and safe.
         self._tts_say(f"{self._config.callsign} rumble-py listening")
         logger.info(
@@ -236,7 +324,7 @@ class Dispatcher:
         )
 
     def stop(self) -> None:
-        """Tear down audio, Mumble, and the TTS worker. Idempotent."""
+        """Tear down audio, Mumble, web, and the TTS worker. Idempotent."""
         with self._lock:
             if not self._running:
                 self._stop_event.set()
@@ -252,6 +340,9 @@ class Dispatcher:
                 self._current_server = None
             if self._tts_thread is not None:
                 self._tts_queue.put(None)  # sentinel
+        # Shutdown work that may block — do it outside the lock so other
+        # threads can still read state during teardown.
+        self._stop_web_server()
         if self._tts_thread is not None:
             self._tts_thread.join(timeout=2.0)
             self._tts_thread = None
@@ -470,3 +561,60 @@ class Dispatcher:
     def _tts_say(self, text: str) -> None:
         """Enqueue ``text`` for synthesis. Returns immediately."""
         self._tts_queue.put(text)
+
+    # ----- web UI plumbing ----------------------------------------------
+
+    def _start_web_server(self) -> None:
+        """Spin up uvicorn on its own daemon thread.
+
+        Imports happen here (not at module load time) so the FastAPI stack
+        isn't pulled in when ``web.enabled=False``.
+        """
+        import uvicorn
+
+        from rumble.web.app import create_app
+        from rumble.web.log_buffer import LogBuffer, install_log_capture
+
+        self._log_buffer = LogBuffer()
+        self._log_handler = install_log_capture(self._log_buffer)
+
+        app = create_app(self, log_buffer=self._log_buffer)
+        uvicorn_config = uvicorn.Config(
+            app,
+            host=self._config.web.host,
+            port=self._config.web.port,
+            log_level="warning",
+            access_log=False,
+        )
+        self._uvicorn_server = uvicorn.Server(uvicorn_config)
+
+        def run_server() -> None:
+            # uvicorn.Server.run() creates its own asyncio loop on this thread.
+            self._uvicorn_server.run()
+
+        self._uvicorn_thread = threading.Thread(target=run_server, name="uvicorn", daemon=True)
+        self._uvicorn_thread.start()
+        logger.info(
+            "web UI listening on http://%s:%d/",
+            self._config.web.host,
+            self._config.web.port,
+        )
+
+    def _stop_web_server(self) -> None:
+        """Signal uvicorn to exit and tear down the log handler. No-op if web
+        was never started."""
+        if self._uvicorn_server is None and self._log_handler is None:
+            return
+
+        from rumble.web.log_buffer import uninstall_log_capture
+
+        if self._uvicorn_server is not None:
+            self._uvicorn_server.should_exit = True
+        if self._uvicorn_thread is not None:
+            self._uvicorn_thread.join(timeout=3.0)
+            self._uvicorn_thread = None
+            self._uvicorn_server = None
+        if self._log_handler is not None:
+            uninstall_log_capture(self._log_handler)
+            self._log_handler = None
+        self._log_buffer = None

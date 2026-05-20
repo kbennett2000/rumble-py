@@ -90,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Config error: {exc}", file=sys.stderr)
         return 2
 
-    dispatcher = Dispatcher(config, bank=args.bank)
+    dispatcher = Dispatcher(config, bank=args.bank, config_path=args.config)
 
     def handle_signal(signum: int, _frame: FrameType | None) -> None:
         logging.info("received signal %d, shutting down", signum)
