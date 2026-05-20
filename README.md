@@ -33,6 +33,12 @@ python scripts/listen_for_dtmf.py
 #    Then key tones into the radio — each detected tone prints a timestamped
 #    start/stop line. Pass --device <index-or-name-substring> to skip the
 #    interactive picker.
+
+# 6. End-to-end Mumble smoke test (requires the dev server from step 2):
+python scripts/mumble_smoke.py
+#    Connects, joins Root, transmits 2s of a 440 Hz sine, listens for 10s.
+#    Run a Mumble desktop client into the same channel to hear the tone and
+#    to talk back; the script will print every incoming audio frame.
 ```
 
 ## License

@@ -63,6 +63,32 @@ A small FastAPI app provides a config UI on localhost.
   real hardware or a network to exercise). Prefer integration tests with the
   local Docker Mumble server over heavy mocking.
 
+## Known workarounds
+
+### pymumble + Python 3.12 SSL shim
+
+pymumble 1.6.1 (the current PyPI release) calls `ssl.wrap_socket()`, which
+Python 3.12 removed. Upstream master has been fixed but no release has
+shipped. To unblock Python 3.12 + 3.13 we install a shim at the top of
+`src/rumble/mumble_client.py` that re-implements `ssl.wrap_socket` using
+`ssl.SSLContext`. The shim runs at module import time, before
+`pymumble_py3` is imported, and is guarded by `if not hasattr(ssl,
+"wrap_socket")` so it's a no-op on Python ≤ 3.11.
+
+`pymumble` is pinned to `==1.6.1` in `pyproject.toml` so a new release
+can't silently change the SSL setup out from under the shim.
+
+**To remove this workaround once upstream cuts a fixed release:**
+
+1. Delete the `if not hasattr(ssl, "wrap_socket"): …` block (and the
+   surrounding comment) from the top of `src/rumble/mumble_client.py`.
+2. Drop the `import ssl` if nothing else in the file uses it.
+3. Bump the pinned `pymumble==1.6.1` in `pyproject.toml` to the new
+   version, and update the comment block above the dependency.
+4. Re-install (`pip install -e ".[dev]"`) and run the full integration
+   suite (`cd docker && docker compose up -d && cd .. &&
+   RUMBLE_INTEGRATION=1 pytest -v -k mumble`). All 43 tests must pass.
+
 ## Commits
 
 Use [Conventional Commits](https://www.conventionalcommits.org/):

@@ -32,8 +32,15 @@ classifiers = [
 
 # Runtime dependencies. We pin loosely (>=) so that pip can resolve compatible
 # versions, but lock the major where we know breaking changes happen.
+#
+# pymumble 1.6.1 uses ssl.wrap_socket, which is removed in Python 3.12, so
+# mumble_client.py installs a shim before importing pymumble. The version is
+# pinned exactly (not >=) because a future pymumble release may either fix
+# the bug (making our shim dead code) or change the API around the SSL
+# setup (making our shim incorrect). Either way, bump deliberately after
+# re-running the integration tests — see CLAUDE.md "Known workarounds".
 dependencies = [
-    "pymumble>=1.6",       # speaks the Mumble protocol directly (no subprocess)
+    "pymumble==1.6.1",     # exact pin — see comment above
     "sounddevice>=0.4",    # cross-platform audio I/O via PortAudio
     "numpy>=1.26",         # used for DTMF DSP (Goertzel filter, FFT, etc.)
     "pyyaml>=6.0",         # config file parsing
