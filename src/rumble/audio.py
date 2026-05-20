@@ -79,6 +79,7 @@ class AudioCapture:
         device: int | str | None = None,
         sample_rate: int = DEFAULT_SAMPLE_RATE,
         on_tone: Callable[[ToneEvent], None] = _noop,
+        min_magnitude: float | None = None,
     ) -> None:
         """Construct an AudioCapture.
 
@@ -91,12 +92,19 @@ class AudioCapture:
             on_tone: Callback invoked once per emitted ToneEvent. Runs on the
                 worker thread (NOT the audio callback thread), so it's safe
                 to do I/O and other blocking work here.
+            min_magnitude: Forwarded to :class:`DtmfDetector` to tune the
+                Goertzel threshold for "tone present". ``None`` keeps the
+                detector's default (0.05) — see dtmf_detector.py for the
+                trade-off.
         """
         self._device = device
         self._sample_rate = sample_rate
         self._on_tone = on_tone
 
-        self._detector = DtmfDetector(sample_rate=sample_rate)
+        detector_kwargs: dict[str, Any] = {"sample_rate": sample_rate}
+        if min_magnitude is not None:
+            detector_kwargs["min_magnitude"] = min_magnitude
+        self._detector = DtmfDetector(**detector_kwargs)
         # None in the queue is the shutdown sentinel for the worker.
         self._queue: queue.Queue[np.ndarray | None] = queue.Queue()
         self._stream: sd.InputStream | None = None

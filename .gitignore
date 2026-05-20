@@ -223,6 +223,9 @@ __marimo__/
 # Local user config — copy from config.example.yaml and edit.
 config.yaml
 config.yml
+config.*.yaml
+config.*.yml
+!config.example.yaml
 
 # Local audio recordings / debug captures
 *.wav

@@ -39,6 +39,13 @@ python scripts/mumble_smoke.py
 #    Connects, joins Root, transmits 2s of a 440 Hz sine, listens for 10s.
 #    Run a Mumble desktop client into the same channel to hear the tone and
 #    to talk back; the script will print every incoming audio frame.
+
+# 7. Run the full app. Copy the example config and edit for your setup:
+cp config.example.yaml config.dev.yaml
+$EDITOR config.dev.yaml
+python -m rumble --config config.dev.yaml
+#    This connects to the configured Mumble server, opens an audio input,
+#    and starts listening for DTMF. Ctrl-C to shut down.
 ```
 
 ## License

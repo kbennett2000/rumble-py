@@ -2,110 +2,119 @@
 # rumble-py — example configuration
 # =============================================================================
 #
-# Copy this file to `config.yaml` and edit to taste. `config.yaml` is in
-# .gitignore and will not be committed.
+# Copy to `config.dev.yaml` (gitignored) or `config.yaml` and edit. Run with:
 #
-# DTMF command model
-# ------------------
-# The original C# tool used a CSV that mapped a DTMF "server number" plus a
-# "channel number" to a server+channel pair. rumble-py keeps that mental model
-# but stores it in YAML so it's easier to read and comment.
+#     python -m rumble --config config.dev.yaml
 #
-# Example: if the operator keys `*12#` on the radio, that could be parsed as
-# server=1, channel=2 and look up `servers[1]` then `channel_map[1][2]`.
-# The exact DTMF grammar is defined in code; this file just provides the data.
+# Layout notes:
+#
+# * Audio, ident, and web settings are shared across all banks (they describe
+#   *this* node, not a particular destination).
+# * Each bank is a fully-independent set of Mumble servers + DTMF channel
+#   mappings. The DTMF command `#N**` (where N is 0-9) swaps to bank N at
+#   runtime without restarting the program.
+# * Channel mappings reference servers by `name`, so the same channel-map
+#   shape can be reused for staging vs. production by editing only the
+#   server entries.
 # =============================================================================
 
 
 # ---------------------------------------------------------------------------
 # Operator identity
 # ---------------------------------------------------------------------------
-# Your amateur radio callsign. Used in voice-ID announcements and as the
-# default Mumble username if a server entry doesn't override it.
+# Required. Your amateur radio callsign — spoken in TTS announcements and
+# used as the default Mumble username if a server entry doesn't override it.
 callsign: "AE9S"
 
-
-# ---------------------------------------------------------------------------
-# Mumble servers
-# ---------------------------------------------------------------------------
-# A list of every Mumble server this radio is allowed to connect to.
-# Each entry needs:
-#   name          — short human-readable label (logged, spoken via TTS)
-#   host          — DNS name or IP
-#   port          — usually 64738
-#   username      — what we'll appear as in Mumble (defaults to `callsign`)
-#   password      — optional; omit or leave blank for open servers
-#   channel_path  — channel to join after connect, as a slash-separated path
-#                   from the root, e.g. "Root/Repeaters/W9XYZ".
-servers:
-  - name: "local-dev"
-    host: "127.0.0.1"
-    port: 64738
-    username: "AE9S"
-    # password: ""
-    channel_path: "Root"
-
-  - name: "example-repeater-net"
-    host: "mumble.example.org"
-    port: 64738
-    username: "AE9S"
-    channel_path: "Root/Repeaters/Midwest"
+# Bank loaded at program start. Must be one of the keys under `banks:` below.
+initial_bank: 0
 
 
 # ---------------------------------------------------------------------------
-# DTMF channel map
+# Audio I/O (shared across banks)
 # ---------------------------------------------------------------------------
-# Maps "server number + channel number" pairs (as keyed on the radio) to an
-# entry in the `servers:` list above (by `name`) and, optionally, an override
-# of which channel to join.
-#
-# The outer key is the server number (DTMF digit), the inner key is the
-# channel number (DTMF digit). Each leaf points to:
-#   server        — name of an entry from `servers:` above
-#   channel_path  — optional override of that server's default channel_path
-channel_map:
-  1:
-    1:
-      server: "local-dev"
-      channel_path: "Root"
-    2:
-      server: "local-dev"
-      channel_path: "Root/Lobby"
-  2:
-    1:
-      server: "example-repeater-net"
-      channel_path: "Root/Repeaters/Midwest"
-    2:
-      server: "example-repeater-net"
-      channel_path: "Root/Repeaters/Mountain"
-
-
-# ---------------------------------------------------------------------------
-# Audio devices
-# ---------------------------------------------------------------------------
-# Names as reported by `python -m sounddevice`. Use "default" to let the OS
-# pick. On Linux these are usually ALSA device names; on Windows they're
-# WASAPI/MME device names.
 audio:
-  input_device: "default"     # radio receiver audio coming IN to the computer
-  output_device: "default"    # audio going OUT to the radio's mic / line-in
+  # Use `null` (or omit) for system default. A string is treated as a
+  # substring match against sounddevice device names. Run
+  # `python -m rumble --list-audio-devices` to see what's available.
+  input_device: null
+  output_device: null
+
+  # Sample rate the radio audio is captured at. 8 kHz is plenty for DTMF and
+  # matches narrowband VOIP, so no resampling is needed.
+  sample_rate: 8000
+
+  # Minimum Goertzel magnitude (after N-normalization) to count a tone as
+  # present. 0.05 catches half-scale signals comfortably; lower it if your
+  # line-level input is quiet, raise it if you're seeing false detections.
+  dtmf_min_magnitude: 0.05
 
 
 # ---------------------------------------------------------------------------
-# Station ID (CW or voice WAV played periodically over the air)
+# Station identification (shared across banks)
 # ---------------------------------------------------------------------------
-# Per FCC §97.119, you must ID at least every 10 minutes when transmitting.
-# `wav_path` is the file played; `interval_seconds` is how often.
+# Per FCC §97.119, you must ID at least every 10 minutes while transmitting.
 ident:
-  wav_path: "./ident.wav"
-  interval_seconds: 540        # 9 minutes — safely under the 10-minute rule
+  wav_path: null              # path to a pre-recorded CW or voice WAV
+  interval_seconds: 540       # 9 minutes — comfortably under the 10-minute rule
 
 
 # ---------------------------------------------------------------------------
-# Local web UI
+# Local web UI (shared across banks)
 # ---------------------------------------------------------------------------
-# FastAPI/uvicorn binding. Keep this on 127.0.0.1 unless you really want it
-# exposed to the network.
 web:
-  bind_address: "127.0.0.1"
+  enabled: true
+  host: "127.0.0.1"           # bind only to localhost unless you really know
   port: 8080
+
+
+# ---------------------------------------------------------------------------
+# Banks
+# ---------------------------------------------------------------------------
+# Each bank is a snapshot of (servers + DTMF→channel map). The DTMF command
+# `#N**` swaps the active bank to N. To switch banks back, type `#M**`.
+banks:
+
+  # ---- Bank 0: default / local development -----------------------------------
+  0:
+    servers:
+      # Each server gets a short `name` that channel mappings reference.
+      - name: "local-dev"
+        host: "127.0.0.1"
+        port: 64738
+        username: "AE9S"
+        # password: ""           # optional; omit for open servers
+        # certfile: "./client.pem"  # optional; for cert auth
+        # keyfile: "./client.key"
+
+    channels:
+      # DTMF "#001#1*" → connect to server "local-dev", channel "Root", and
+      # TTS-announce "local lobby".
+      #
+      # server_number and channel_number are kept as STRINGS so leading zeros
+      # are preserved — quote them, or the YAML parser may swallow the zero.
+      - server_number: "001"
+        channel_number: "1"
+        server_ref: "local-dev"
+        channel_path: "Root"
+        nickname: "local lobby"
+
+  # ---- Bank 1: example production --------------------------------------------
+  1:
+    servers:
+      - name: "example-repeater-net"
+        host: "mumble.example.org"
+        port: 64738
+        username: "AE9S"
+
+    channels:
+      - server_number: "001"
+        channel_number: "1"
+        server_ref: "example-repeater-net"
+        channel_path: "Root/Repeaters/Midwest"
+        nickname: "Midwest"
+      - server_number: "001"
+        channel_number: "2"
+        server_ref: "example-repeater-net"
+        channel_path: "Root/Repeaters/Mountain"
+        nickname: "Mountain"
