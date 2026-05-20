@@ -89,6 +89,120 @@ can't silently change the SSL setup out from under the shim.
    suite (`cd docker && docker compose up -d && cd .. &&
    RUMBLE_INTEGRATION=1 pytest -v -k mumble`). All 43 tests must pass.
 
+## Documentation conventions
+
+### Audience and voice
+
+The user-facing docs are written for a **licensed amateur radio operator**
+who:
+
+- Knows radio (bands, RF, PTT, repeaters, callsigns, FCC §97.119 or
+  equivalent, Morse code identification requirements).
+- Knows in principle how to wire a sound-card interface to a radio.
+- **May not** know modern VOIP concepts (what Mumble is, what a
+  "channel" means in Mumble, TLS certs, port forwarding for VOIP).
+- **May not** be deep in Linux command-line tools beyond the basics.
+- Could be a Tech-class, brand new, or a 50-year Extra — write for the
+  middle.
+
+Voice is **friendly-expert**. Warm enough that a new Tech doesn't bounce,
+technical enough that an Extra isn't talked down to. Active voice. Use
+**"we"** for the project (*"we built this because…"*) and **"you"** for
+the reader (*"when you connect your radio…"*). Never **"the user"** in
+operating contexts — always **"operator"**.
+
+Dry humor is fine in prose; never in reference tables, command syntax, or
+troubleshooting steps. No memes, no marketing fluff, no "blazingly fast."
+No emoji except 📻 in the README title and **73!** as the README sign-off.
+
+### Amateur radio register
+
+Lean into the ham culture. Don't soften the vocabulary:
+
+- "Shack reference card" or "operating card," not "quick reference."
+- "Operator" instead of "user" in operating contexts.
+- Reference FCC §97.119 where appropriate; acknowledge operators
+  outside the U.S. have equivalent rules.
+- Verbs like "kerchunk," "key up," "key down" used naturally.
+- Concepts like simplex, repeater, net, courtesy tone, deviation, used
+  without apology.
+
+### Callsigns in examples
+
+The project author's callsign is **AE9S**. Use it for "the node speaking"
+and for any example that needs a specific real-feeling identity.
+
+For examples involving other operators or other nodes, use **fictional
+callsigns**:
+
+- `W0XYZ`
+- `N1ABC`
+- `K9TST`
+
+Never use a real, currently-licensed callsign for a hypothetical scenario.
+
+### The seven documents
+
+The user-facing documentation set is seven files. Each has a specific
+job; keep them in their lane.
+
+1. **[README.md](README.md)** — the front door. Long-form. What rumble-py
+   is, why it exists, how to install it, how to operate it, status,
+   roadmap. Links out to everything else.
+2. **[docs/CHEAT_SHEET.md](docs/CHEAT_SHEET.md)** — one-page printable
+   reference card for the shack. Dense, no prose, fits on a single 8.5×11
+   page.
+3. **[docs/CONCEPTS.md](docs/CONCEPTS.md)** — Mumble, VOIP, channels,
+   certs, comparison to IRLP / EchoLink / AllStar / Hamshack Hotline. For
+   hams new to VOIP.
+4. **[docs/HARDWARE.md](docs/HARDWARE.md)** — radios, sound-card
+   interfaces, audio levels, PTT options, common gotchas. Practical, not
+   theoretical.
+5. **[docs/CONFIGURATION.md](docs/CONFIGURATION.md)** — every field in
+   `config.yaml`, what it does, what the validator will reject, plus a
+   fully-annotated example.
+6. **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — Raspberry Pi setup,
+   systemd unit, log rotation, network considerations, multi-node
+   topologies. For "I'm putting this in a real shack."
+7. **[CLAUDE.md](CLAUDE.md)** — this file. Internal conventions and
+   collaborator context.
+
+### Consistent terminology
+
+Use these terms exactly; pick one and stick with it.
+
+| Use | Not |
+|---|---|
+| Mumble server | Murmur (except once in CONCEPTS, to help Google) |
+| Node | rumble-py instance / install / box |
+| Operator | User (only in operating contexts) |
+| Bank | Profile / mode / configuration |
+| Channel mapping | Channel entry / route / DTMF route |
+| DTMF command, command sequence | Control code / key combo |
+
+### Do not write like this
+
+Negative examples to keep future doc edits consistent:
+
+> "🚀 Rumble is a blazingly fast, modern, cross-platform solution for
+> linking your analog radios over the internet using cutting-edge
+> technology!"
+
+No emoji bombs. No "blazingly fast." No marketing adjectives.
+
+> "In order to facilitate the user's interaction with the Mumble
+> protocol, the application provides a comprehensive interface that
+> exposes all available functionality through a well-designed API."
+
+No corporate fluff. Say what it does in plain words.
+
+> "The user should ensure that the configuration file is properly
+> formatted before attempting to start the application."
+
+Active voice. "You" not "the user." Concrete: *"Validate the config with
+`python -m rumble --config path/to/file.yaml`; the loader will tell you
+which field is wrong."*
+
 ## Commits
 
 Use [Conventional Commits](https://www.conventionalcommits.org/):
